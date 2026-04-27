@@ -1,19 +1,20 @@
 package com.acme.modres;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.List;
-import javax.naming.InitialContext;
+
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -21,26 +22,51 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import com.acme.modres.mbean.IOUtils;
-import com.acme.modres.mbean.reservation.DateChecker;
-import com.acme.modres.mbean.reservation.ReservationCheckerData;
 import com.acme.modres.mbean.reservation.Reservation;
-
+import com.acme.modres.mbean.reservation.ReservationCheckerData;
 import com.acme.modres.util.ZipValidator;
+import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
 
 @WebServlet({ "/resorts/availability" })
 public class AvailabilityCheckerServlet extends HttpServlet {
   private static final long serialVersionUID = 1L;
 
   private static final Logger logger = Logger.getLogger(AvailabilityCheckerServlet.class.getName());
-
-  private static InitialContext context;
-
+  
+  private static final String GCS_BUCKET_NAME = System.getenv().getOrDefault("GCS_BUCKET_NAME", "modresorts-config");
+  
   private ReservationCheckerData reservationCheckerData;
+  
+  // Use ScheduledExecutorService instead of java.util.Timer for cloud-native scheduling
+  private ScheduledExecutorService scheduledExecutor;
+  
+  private Storage storage;
 
   @Override
   public void init() {
-    // load reserved dates
+    // Initialize Google Cloud Storage client
+    try {
+      storage = StorageOptions.getDefaultInstance().getService();
+    } catch (Exception e) {
+      logger.severe("Failed to initialize Google Cloud Storage: " + e.getMessage());
+    }
+    
+    // Initialize scheduled executor for cloud-native task scheduling
+    scheduledExecutor = Executors.newScheduledThreadPool(2);
+    
+    // Load reserved dates
     this.reservationCheckerData = new ReservationCheckerData(IOUtils.getReservationListFromConfig());
+  }
+  
+  @Override
+  public void destroy() {
+    // Clean up scheduled executor
+    if (scheduledExecutor != null && !scheduledExecutor.isShutdown()) {
+      scheduledExecutor.shutdown();
+    }
+    super.destroy();
   }
 
   @Override
@@ -59,17 +85,25 @@ public class AvailabilityCheckerServlet extends HttpServlet {
       List<Reservation> reservations = reservationCheckerData.getReservationList().getReservations();
       boolean isAvailible = true;
 
+      // Use UTC-based time comparison for cloud-native consistency
       for (Reservation reservation : reservations) {
         try {
-          Date fromDate = new SimpleDateFormat(Constants.DATA_FORMAT).parse(reservation.getFromDate());
-          Date toDate = new SimpleDateFormat(Constants.DATA_FORMAT).parse(reservation.getToDate());
-          Date selectedDate = reservationCheckerData.getSelectedDate();
+          DateTimeFormatter formatter = DateTimeFormatter.ofPattern(Constants.DATA_FORMAT);
+          
+          ZonedDateTime fromDate = ZonedDateTime.parse(reservation.getFromDate() + " 00:00:00", 
+              DateTimeFormatter.ofPattern(Constants.DATA_FORMAT + " HH:mm:ss").withZone(ZoneOffset.UTC));
+          ZonedDateTime toDate = ZonedDateTime.parse(reservation.getToDate() + " 00:00:00", 
+              DateTimeFormatter.ofPattern(Constants.DATA_FORMAT + " HH:mm:ss").withZone(ZoneOffset.UTC));
+          
+          Instant selectedInstant = reservationCheckerData.getSelectedDate().toInstant();
+          ZonedDateTime selectedDate = ZonedDateTime.ofInstant(selectedInstant, ZoneOffset.UTC);
 
-          if (selectedDate.after(fromDate) && selectedDate.before(toDate)) {
+          if (selectedDate.isAfter(fromDate) && selectedDate.isBefore(toDate)) {
             isAvailible = false;
             break;
           }
-        } catch (ParseException ex) {
+        } catch (Exception ex) {
+          logger.warning("Error parsing reservation dates: " + ex.getMessage());
           ex.printStackTrace();
         }
       }
@@ -82,11 +116,12 @@ public class AvailabilityCheckerServlet extends HttpServlet {
       }
     }
 
-    // Send the response
-    PrintWriter out = response.getWriter();
+    // Send the response with try-with-resources for automatic resource management
     response.setContentType("application/json");
     response.setCharacterEncoding("UTF-8");
-    out.print("{\"availability\": \"" + String.valueOf(reservationCheckerData.isAvailible()) + "\"}");
+    try (PrintWriter out = response.getWriter()) {
+      out.print("{\"availability\": \"" + String.valueOf(reservationCheckerData.isAvailible()) + "\"}");
+    }
     response.setStatus(statusCode);
   }
 
@@ -99,46 +134,58 @@ public class AvailabilityCheckerServlet extends HttpServlet {
     doGet(request, response);
   }
 
+  /**
+   * Exports reservations to Google Cloud Storage instead of local file system.
+   * This ensures data persistence across container restarts and scaling events.
+   */
   protected int exportRevervations(String selectedDateStr) {
-    File fileToZip = IOUtils.getFileFromRelativePath("reservations.json");
-    String userDirectory = System.getProperty("user.home");
-    String zipPath = userDirectory + "/reservations.zip";
-
-    FileOutputStream fos;
-    try {
-      fos = new FileOutputStream(zipPath);
-      ZipOutputStream zipOut = new ZipOutputStream(fos);
-
-      FileInputStream fis = new FileInputStream(fileToZip);
-      ZipEntry zipEntry = new ZipEntry(fileToZip.getName());
+    if (storage == null) {
+      logger.severe("Google Cloud Storage client not initialized");
+      return -1;
+    }
+    
+    // Use try-with-resources for automatic resource management
+    try (InputStream fileStream = IOUtils.getResourceAsStream("reservations.json");
+         ByteArrayOutputStream baos = new ByteArrayOutputStream();
+         ZipOutputStream zipOut = new ZipOutputStream(baos)) {
+      
+      if (fileStream == null) {
+        logger.severe("reservations.json not found");
+        return -1;
+      }
+      
+      // Create zip entry
+      ZipEntry zipEntry = new ZipEntry("reservations.json");
       zipOut.putNextEntry(zipEntry);
 
+      // Copy file content to zip
       byte[] bytes = new byte[1024];
       int length;
-      while ((length = fis.read(bytes)) >= 0) {
+      while ((length = fileStream.read(bytes)) >= 0) {
         zipOut.write(bytes, 0, length);
       }
-      fis.close();
-
-      zipOut.close();
-      fos.close();
-
-      // verify zip
-      ZipValidator zipValidator = new ZipValidator(new File(zipPath));
-      if (zipValidator.isValid()) {
-        return 0;
-      }
-    } catch (FileNotFoundException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      
+      zipOut.closeEntry();
+      zipOut.finish();
+      
+      // Upload to Google Cloud Storage
+      byte[] zipContent = baos.toByteArray();
+      String gcsPath = "exports/reservations_" + System.currentTimeMillis() + ".zip";
+      
+      BlobInfo blobInfo = BlobInfo.newBuilder(GCS_BUCKET_NAME, gcsPath).build();
+      storage.create(blobInfo, zipContent);
+      
+      logger.info("Successfully exported reservations to GCS: " + gcsPath);
+      return 0;
+      
     } catch (IOException e) {
-      // TODO Auto-generated catch block
+      logger.severe("Error exporting reservations: " + e.getMessage());
       e.printStackTrace();
+      return -1;
     } catch (Throwable e) {
-      // TODO Auto-generated catch block
+      logger.severe("Unexpected error exporting reservations: " + e.getMessage());
       e.printStackTrace();
+      return -1;
     }
-    return -1;
   }
-
 }

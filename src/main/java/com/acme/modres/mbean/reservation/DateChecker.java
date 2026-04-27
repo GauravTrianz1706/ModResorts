@@ -1,12 +1,17 @@
 package com.acme.modres.mbean.reservation;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import com.acme.modres.Constants;
 
+/**
+ * Cloud-native date checker using UTC timestamps for consistent behavior
+ * across distributed cloud environments and multiple regions.
+ */
 public class DateChecker implements Runnable {
   ReservationCheckerData data;
   List<Reservation> reservations;
@@ -19,16 +24,24 @@ public class DateChecker implements Runnable {
   public void run() {
     for (int i = 0; i < reservations.size(); i++) {
       Reservation reservation = reservations.get(i);
-      Date selectedDate = data.getSelectedDate();
-
+      
+      // Use UTC-based time comparison for cloud-native consistency
       try {
-        Date fromDate = new SimpleDateFormat(Constants.DATA_FORMAT).parse(reservation.getFromDate());
-        Date toDate = new SimpleDateFormat(Constants.DATA_FORMAT).parse(reservation.getToDate());
-        if (selectedDate.after(fromDate) && selectedDate.before(toDate)) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(Constants.DATA_FORMAT + " HH:mm:ss")
+            .withZone(ZoneOffset.UTC);
+        
+        ZonedDateTime fromDate = ZonedDateTime.parse(reservation.getFromDate() + " 00:00:00", formatter);
+        ZonedDateTime toDate = ZonedDateTime.parse(reservation.getToDate() + " 00:00:00", formatter);
+        
+        Instant selectedInstant = data.getSelectedDate().toInstant();
+        ZonedDateTime selectedDate = ZonedDateTime.ofInstant(selectedInstant, ZoneOffset.UTC);
+        
+        if (selectedDate.isAfter(fromDate) && selectedDate.isBefore(toDate)) {
           data.setAvailablility(false);
-          break;
+          return;
         }
-      } catch (ParseException ex) {
+      } catch (Exception ex) {
+        System.err.println("Error parsing reservation dates: " + ex.getMessage());
         ex.printStackTrace();
       }
     }

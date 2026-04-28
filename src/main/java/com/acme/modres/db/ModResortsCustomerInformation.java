@@ -1,16 +1,19 @@
 package com.acme.modres.db;
 
 import javax.annotation.Resource;
-import javax.ejb.Singleton;
 import javax.ejb.Startup;
 import javax.sql.DataSource;
+import org.springframework.stereotype.Component;
+import org.springframework.cache.annotation.Cacheable;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 
-@Singleton
+// Replace @Singleton with Spring @Component for stateless service
+// Use Spring Cache abstraction with Redis for distributed caching across container instances
+@Component
 @Startup
 public class ModResortsCustomerInformation {
   private static final String SELECT_CUSTOMERS_QUERY = "SELECT INFO FROM CUSTOMER";
@@ -19,6 +22,9 @@ public class ModResortsCustomerInformation {
   // @Resource(lookup = "jdbc/ModResortsJndi")
   private DataSource dataSource;
 
+  // Add @Cacheable annotation to enable distributed caching with Amazon ElastiCache (Redis)
+  // This replaces singleton-based state storage with distributed cache for horizontal scaling
+  @Cacheable(value = "customerInformation", unless = "#result == null || #result.isEmpty()")
   public ArrayList<String> getCustomerInformation() {
     Connection conn = null;
     PreparedStatement stmt = null;

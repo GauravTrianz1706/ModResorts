@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modresorts
+  namespace: modresorts
+  labels:
+    app: modresorts
+    version: v2.0.0
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: modresorts
+  template:
+    metadata:
+      labels:
+        app: modresorts
+        version: v2.0.0
+    spec:
+      containers:
+      - name: modresorts
+        image: {{IMAGE_URI}}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        env:
+        - name: JAVA_OPTS
+          value: "-Xmx512m -Xms256m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+        - name: TZ
+          value: "UTC"
+        # Database configuration (uncomment and configure if needed)
+        # - name: DB_HOST
+        #   value: "{{DB_HOST}}"
+        # - name: DB_PORT
+        #   value: "{{DB_PORT}}"
+        # - name: DB_NAME
+        #   value: "{{DB_NAME}}"
+        # - name: DB_USER
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: modresorts-secrets
+        #       key: db-user
+        # - name: DB_PASSWORD
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: modresorts-secrets
+        #       key: db-password
+        # Redis cache configuration (uncomment and configure if needed)
+        # - name: REDIS_HOST
+        #   value: "{{REDIS_HOST}}"
+        # - name: REDIS_PORT
+        #   value: "{{REDIS_PORT}}"
+        # - name: REDIS_PASSWORD
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: modresorts-secrets
+        #       key: redis-password
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 90
+          periodSeconds: 30
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30

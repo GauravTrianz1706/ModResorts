@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  modresorts:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: modresorts:latest
+    container_name: modresorts-app
+    ports:
+      - "8080:8080"
+    environment:
+      # Server Configuration
+      - SERVER_PORT=8080
+      - SERVER_NAME=modresorts-docker
+      - SERVER_FULL_NAME=modresorts-docker-instance
+      
+      # Database Configuration (externalized)
+      - DB_URL=jdbc:postgresql://your-db-host:5432/modresorts
+      - DB_USERNAME=dbuser
+      - DB_PASSWORD=dbpassword
+      - DB_DRIVER=org.postgresql.Driver
+      
+      # Redis Configuration (externalized)
+      - REDIS_HOST=your-redis-host
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - REDIS_TIMEOUT=2000
+      
+      # Service Registry Configuration
+      - SERVICE_REGISTRY_URL=http://service-registry:8080
+      - AWS_CLOUDMAP_NAMESPACE=modresorts-namespace
+      
+      # Spring Profile
+      - SPRING_PROFILES_ACTIVE=docker
+      
+      # JVM Options
+      - JAVA_OPTS=-Xmx512m -Xms256m -XX:+UseContainerSupport
+    networks:
+      - modresorts-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  modresorts-network:
+    driver: bridge

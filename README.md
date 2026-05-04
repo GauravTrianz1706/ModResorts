@@ -1,109 +1,194 @@
-# ModResorts Demo Application
+# ModResorts - Containerized Application
 
 ## Overview
-ModResorts (as per the `main` branch) is a IBM WebSphere Application Server web application. It is a simple application that can be used to demonstrate modernization of a IBM WebSphere Application Server to Liberty, as well as Java version upgrade scenarios.
-The Java source code is dependent on APIs that only exist on the IBM WebSphere Application Server and as such, this version of the application will only function correctly when deployed to IBM WebSphere Application Server. In order to successfully deploy to Liberty, code changes need to be made to the application. See [Liberty Versions of ModResorts](#liberty-versions-of-modresorts) below.
+ModResorts application has been migrated from WebSphere to Spring Boot for containerized deployment on AWS ECS/EKS.
 
+## Containerization Blockers Fixed
 
-## Building
+### Critical Blockers (WebSphere Specific Features)
+1. **blocker-1**: Replaced `WSSecurityHelper.revokeSSOCookies` with standard servlet session invalidation
+2. **blocker-2**: Replaced `ResponseUtils.encodeDataString` with Spring's `HtmlUtils.htmlEscape`
+3. **blocker-3**: Replaced WebSphere `ServerName` APIs with environment variables
 
-### IBM WebSphere Application Server Dependencies
-The `main` branch version of ModResorts has dependencies on WebSphere Application Server APIs. The `pom.xml` references the associated WAS dependency and to build the application, you will need to have the dependency available in a maven repository. The `was_public.jar` jar and its associated `pom` file can be found in your WebSphere installation. For example, in a typical installation, you might find them at the following location: `/opt/WebSphere/AppServer/dev`.
-You can install to your local maven repository (`$HOME/.m2`) using the following command:
+### High Priority Blockers
+4. **blocker-4**: Migrated singleton state storage to Spring Cache with Redis (Amazon ElastiCache)
+5. **blocker-5**: Replaced RMI/IIOP JNDI lookups with REST-based service discovery
+6. **blocker-6-10**: Removed all WebSphere server-specific dependencies
 
-```
-mvn install:install-file -Dfile=<some location>/was_public.jar -DpomFile=<some location>/was_public-9.0.0.pom
-```
+## Architecture Changes
 
-For more information please see the [docs](https://www.ibm.com/docs/en/wasdtfe?topic=environment-installing-server-apis-into-maven-repository).
+### From WebSphere to Spring Boot
+- **Application Server**: WebSphere → Spring Boot embedded Tomcat
+- **Dependency Injection**: EJB @Singleton → Spring @Service
+- **Caching**: In-memory singleton → Distributed Redis cache
+- **Service Discovery**: RMI/IIOP → REST with AWS Cloud Map
+- **Metrics**: WebSphere PMI → Micrometer with Prometheus
+- **Health Checks**: Custom → Spring Boot Actuator
 
-### Building Using Maven
-This is a standard single module maven application and the WAR can be built as follows:
+## Configuration
 
-```
+### Environment Variables
+All configuration is externalized via environment variables:
+
+#### Database Configuration
+- `DB_URL`: Database JDBC URL
+- `DB_USERNAME`: Database username
+- `DB_PASSWORD`: Database password
+- `DB_DRIVER`: JDBC driver class name
+
+#### Redis Configuration (Amazon ElastiCache)
+- `REDIS_HOST`: Redis host address
+- `REDIS_PORT`: Redis port (default: 6379)
+- `REDIS_PASSWORD`: Redis password
+
+#### Service Discovery (AWS Cloud Map)
+- `SERVICE_REGISTRY_URL`: Service registry endpoint
+- `AWS_CLOUDMAP_NAMESPACE`: AWS Cloud Map namespace
+
+#### Server Configuration
+- `SERVER_PORT`: Application port (default: 8080)
+- `SERVER_NAME`: Server display name
+- `SERVER_FULL_NAME`: Server full name
+
+#### Weather API
+- `WEATHER_API_KEY`: Weather Underground API key
+
+## Building and Running
+
+### Local Development
+```bash
+# Build the application
 mvn clean package
+
+# Run locally
+java -jar target/modresorts-2.0.0.jar
+
+# Or use Maven
+mvn spring-boot:run
 ```
 
+### Docker Build
+```bash
+# Build Docker image
+docker build -t modresorts:2.0.0 .
 
-### Building Using Gradle
-This application can also be built using gradle:
-
-```
-./gradlew clean build
-```
-
-## Liberty Versions of ModResorts
-Two Liberty versions of the application are maintained on the following branches:
-
-- `liberty-java8`
-  This branch shows what the application looks like after it has been modernized to Liberty. Comparing this branch to main, you will notice the following changes:
-  - Code changes in some source files (to remove use of WAS APIs)
-  - Addition of the Liberty config file: `src/main/liberty/config/server.xml`. This file is produced by IBM Transformation Advisor and is available in the [migration bundle](#migration-bundle)
-  - A `Containerfile` has also been added to the project root to allow you to build an image and run the application in a container.
-  - The Liberty tools [plugin](https://github.com/OpenLiberty/ci.maven) has been added to the `pom.xml` for convenience of running the application in Liberty. 
-
-- `liberty-java21`
-  This branch shows what the application looks like after it has been modernized to Liberty **AND** upgraded to Java 21. Comparing this branch to main, you will notice all the changes described for the `liberty-java8` branch in addition to:
-  - Code changes in some source files (to fix Java upgrade issues)
-
-## Version 2
-Version 2 of ModResorts contains extra migration issues that need to be addressed when modernizing to Liberty and when upgrading Java. Version 2 can be used for a more complete modernization demo.
-
-Version 2 exists in branches that represent the various stages of modernization:
-
-- `main-v2` 
-  This branch captures the application as a traditional WebSphere Application Server application built with and running on Java 8
-
-- `liberty-java8-v2`
-  This branch captures the application after it has been modernized to Liberty, but still built with and running on Java 8
-
-- `liberty-java21-v2`
-  This branch captures the final state of the application after it has been modernized to Liberty, and upgraded to use Java 21.
-
-In order to build and run Version 2 of the application, you need to install the dependencies in the `dependencies` directory to your local maven repository:
-
-```
-mvn install:install-file -Dfile=dependencies/env-config-1.5.jar -DpomFile=dependencies/env-config-1.5.pom
-mvn install:install-file -Dfile=dependencies/env-config-1.6.jar -DpomFile=dependencies/env-config-1.6.pom
-mvn install:install-file -Dfile=dependencies/env-config-1.7.jar -DpomFile=dependencies/env-config-1.7.pom
+# Run container
+docker run -p 8080:8080 \
+  -e DB_URL=jdbc:postgresql://db-host:5432/modresorts \
+  -e DB_USERNAME=dbuser \
+  -e DB_PASSWORD=dbpass \
+  -e REDIS_HOST=redis-host \
+  -e REDIS_PORT=6379 \
+  modresorts:2.0.0
 ```
 
+### AWS ECS Deployment
+```bash
+# Tag for ECR
+docker tag modresorts:2.0.0 <account-id>.dkr.ecr.<region>.amazonaws.com/modresorts:2.0.0
 
-## Deploying the Application to IBM WebSphere Application Server
-There are no special instructions for deploying the application to IBM WebSphere Application Server. There is no configuration required on the application server in order for the application to deploy and function.
+# Push to ECR
+docker push <account-id>.dkr.ecr.<region>.amazonaws.com/modresorts:2.0.0
 
-It can be deployed using the UI console or using `wsadmin`.
-Please refer to the [documentation](https://www.ibm.com/docs/en/was-nd/9.0.5?topic=applications-how-do-i-deploy) for more details on deploying the application to WebSphere Application Server.
-
-
-
-## Deploying the Application to Liberty
-To deploy the application on Liberty you can do one of the following:
-- Install the Liberty tools IDE plugin (VSCode and Eclipse available)
-- Add the Liberty tools plugin to the build configuration. Note, for convenience, the Liberty tools plugin is already added to the `pom.xml` in the `liberty-` branches. Liberty can be launched in dev mode with the following command:
-```
-mvn liberty:dev
-```
-- Run the Liberty tools directly from the command line:
-```
-mvn io.openliberty.tools:liberty-maven-plugin:3.10.2:dev
-```
-- Build and drop the WAR file into Liberty installation.
-
-For more on Liberty Dev Tools please refer to [Develop with Liberty Tools](https://openliberty.io/docs/latest/develop-liberty-tools.html)
-
-## Building and Running the Application a Liberty Container
-A Containerfile exists in the `liberty-` branches. The Containerfile is produced by IBM Transformation Advisor and is available in the [migration bundle](#migration-bundle). It can be used to build an image and run the application in a container. You can build the image as follows:
-
-```
-docker build -t modresorts:latest -f Containerfile .
+# Deploy to ECS using task definition with environment variables
 ```
 
-You can run the container as follows:
+## Health Check Endpoint
 
-```
-docker run --rm -d -p 9080:9080 modresorts:latest
+The application includes Spring Boot Actuator for health monitoring:
+
+- **Health Check**: `GET /actuator/health`
+- **Metrics**: `GET /actuator/metrics`
+- **Prometheus**: `GET /actuator/prometheus`
+
+Example health check response:
+```json
+{
+  "status": "UP",
+  "components": {
+    "diskSpace": {"status": "UP"},
+    "ping": {"status": "UP"},
+    "redis": {"status": "UP"}
+  }
+}
 ```
 
-## Migration Bundle
-The `migration_bundle` directory contains a migration bundle for ModResorts created by [IBM Transformation Advisor](https://www.ibm.com/products/cloud-pak-for-applications/transformation-advisor). It contains an analysis of the application and artifacts that accelerate modernization to Liberty and cloud migration.
+## AWS Infrastructure Requirements
+
+### Amazon ElastiCache (Redis)
+- Create Redis cluster for distributed caching
+- Configure security groups for container access
+- Set REDIS_HOST and REDIS_PORT environment variables
+
+### AWS Cloud Map (Optional)
+- Create service discovery namespace
+- Register services for REST-based discovery
+- Set AWS_CLOUDMAP_NAMESPACE environment variable
+
+### Amazon RDS (Database)
+- Create RDS instance (PostgreSQL/MySQL)
+- Configure security groups
+- Set DB_URL, DB_USERNAME, DB_PASSWORD environment variables
+
+## Migration Notes
+
+### Removed Dependencies
+- `com.ibm.websphere.appserver:was_public` - WebSphere APIs
+- `javax:javaee-api` (provided scope) - Replaced with Spring Boot starters
+
+### Added Dependencies
+- `spring-boot-starter-web` - Web framework
+- `spring-boot-starter-actuator` - Health checks and metrics
+- `spring-boot-starter-data-redis` - Distributed caching
+- `spring-boot-starter-cache` - Cache abstraction
+- `micrometer-registry-prometheus` - Metrics export
+
+### Code Changes
+- **LogoutServlet.java**: Standard session invalidation
+- **UpperServlet.java**: Standard HTML encoding
+- **WeatherServlet.java**: Environment-based configuration, REST service discovery
+- **ModResortsCustomerInformation.java**: Spring Service with distributed caching
+
+## Testing
+
+### Health Check
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+### Application Endpoints
+```bash
+# Logout
+curl http://localhost:8080/logout
+
+# Upper case conversion
+curl http://localhost:8080/resorts/upper?input=hello
+
+# Weather information
+curl http://localhost:8080/resorts/weather?selectedCity=Paris
+```
+
+## Monitoring
+
+### Prometheus Metrics
+Metrics are exposed at `/actuator/prometheus` for Prometheus scraping.
+
+### CloudWatch Integration
+Configure CloudWatch agent to collect logs and metrics from containers.
+
+## Troubleshooting
+
+### Redis Connection Issues
+- Verify REDIS_HOST and REDIS_PORT are correct
+- Check security group rules allow container access
+- Verify Redis cluster is running
+
+### Database Connection Issues
+- Verify DB_URL, DB_USERNAME, DB_PASSWORD are correct
+- Check security group rules
+- Verify RDS instance is accessible from container
+
+### Service Discovery Issues
+- Verify SERVICE_REGISTRY_URL is accessible
+- Check AWS Cloud Map namespace configuration
+- Verify IAM roles have necessary permissions

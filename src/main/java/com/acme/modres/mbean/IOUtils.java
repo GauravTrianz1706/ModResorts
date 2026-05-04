@@ -1,69 +1,63 @@
 package com.acme.modres.mbean;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 
 import com.acme.modres.mbean.reservation.ReservationList;
 import com.acme.modres.util.JsonInputStream;
 
+/**
+ * Cloud-native IOUtils that reads from classpath resources instead of local file system.
+ * Eliminates temporary file creation and local file system dependencies.
+ */
 public final class IOUtils {
 
-  public static File getFileFromRelativePath(String path) {
-    File file = null;
-    InputStream initialStream = null;
-    OutputStream outStream = null;
-    try {
-      initialStream = IOUtils.class.getClassLoader().getResourceAsStream(path);
-      byte[] buffer = new byte[initialStream.available()];
-      initialStream.read(buffer);
-
-      file = File.createTempFile(path, null);
-      outStream = new FileOutputStream(file);
-      outStream.write(buffer);
-      outStream.close();
-    } catch (Exception e) {
-      e.printStackTrace();
-    } finally {
-      if (initialStream != null) {
-        try {
-          initialStream.close();
-        } catch (IOException e) {
-        }
-      } else if (outStream != null) {
-        try {
-          outStream.close();
-        } catch (IOException e) {
-        }
-      }
-    }
-
-    return file;
+  /**
+   * Get resource stream from classpath - no temporary files created
+   * @param path Resource path in classpath
+   * @return InputStream for the resource
+   */
+  public static InputStream getResourceStream(String path) {
+    return IOUtils.class.getClassLoader().getResourceAsStream(path);
   }
 
+  /**
+   * Load operation metadata list from classpath resource
+   * @return OpMetadataList parsed from JSON
+   */
   public static OpMetadataList getOpListFromConfig() {
-    File file = getFileFromRelativePath("ops.json"); // fix hardcoded paths
-    try (JsonInputStream is = new JsonInputStream(file)) {
-      OpMetadataList opList = new OpMetadataList(); // empty default
-      opList = (OpMetadataList) is.parseJsonAs(OpMetadataList.class);
+    InputStream resourceStream = getResourceStream("ops.json");
+    if (resourceStream == null) {
+      System.err.println("ops.json not found in classpath");
+      return new OpMetadataList(); // empty default
+    }
+    
+    try (JsonInputStream is = new JsonInputStream(resourceStream)) {
+      OpMetadataList opList = (OpMetadataList) is.parseJsonAs(OpMetadataList.class);
       return opList;
     } catch (IOException e) {
       e.printStackTrace();
-      return null;
+      return new OpMetadataList(); // empty default
     }
   }
 
+  /**
+   * Load reservation list from classpath resource
+   * @return ReservationList parsed from JSON
+   */
   public static ReservationList getReservationListFromConfig() {
-    File file = getFileFromRelativePath("reservations.json"); // fix hardcoded paths
-    try (JsonInputStream is = new JsonInputStream(file)) {
-      ReservationList reservationList = new ReservationList(); // empty default
-      reservationList = (ReservationList) is.parseJsonAs(ReservationList.class);
+    InputStream resourceStream = getResourceStream("reservations.json");
+    if (resourceStream == null) {
+      System.err.println("reservations.json not found in classpath");
+      return new ReservationList(); // empty default
+    }
+    
+    try (JsonInputStream is = new JsonInputStream(resourceStream)) {
+      ReservationList reservationList = (ReservationList) is.parseJsonAs(ReservationList.class);
       return reservationList;
     } catch (IOException e) {
       e.printStackTrace();
-      return null;
+      return new ReservationList(); // empty default
     }
   }
 

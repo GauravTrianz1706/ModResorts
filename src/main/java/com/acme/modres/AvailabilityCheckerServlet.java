@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.logging.Logger;
+import java.util.logging.Level;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import java.text.ParseException;
@@ -14,11 +15,11 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import javax.naming.InitialContext;
-import javax.servlet.ServletException;
-import javax.servlet.annotation.WebServlet;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import com.acme.modres.mbean.IOUtils;
 import com.acme.modres.mbean.reservation.DateChecker;
@@ -70,7 +71,7 @@ public class AvailabilityCheckerServlet extends HttpServlet {
             break;
           }
         } catch (ParseException ex) {
-          ex.printStackTrace();
+          logger.log(Level.SEVERE, "Error parsing date", ex);
         }
       }
 
@@ -129,14 +130,11 @@ public class AvailabilityCheckerServlet extends HttpServlet {
         return 0;
       }
     } catch (FileNotFoundException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "File not found", e);
     } catch (IOException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "IO error", e);
     } catch (Throwable e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "Unexpected error", e);
     }
     return -1;
   }

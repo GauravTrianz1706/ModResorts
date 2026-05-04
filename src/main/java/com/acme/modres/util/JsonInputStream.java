@@ -6,10 +6,13 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 
 import com.google.gson.Gson;
 
 public class JsonInputStream extends FileInputStream {
+  private static final Logger logger = Logger.getLogger(JsonInputStream.class.getName());
 
   private File file;
 
@@ -28,9 +31,9 @@ public class JsonInputStream extends FileInputStream {
         BufferedReader reader = new BufferedReader(new InputStreamReader(is));
         jsonObject = gson.fromJson(reader, cls);
       } catch (Exception e) {
-        e.printStackTrace();
+        logger.log(Level.SEVERE, "Error parsing JSON file: " + file.getName(), e);
       } catch (Throwable e) {
-        e.printStackTrace();
+        logger.log(Level.SEVERE, "Unexpected error parsing JSON file: " + file.getName(), e);
       } finally {
         if (is != null) {
           try {
@@ -40,7 +43,7 @@ public class JsonInputStream extends FileInputStream {
             // closed successfully
             return jsonObject;
           } catch (Throwable e) {
-            e.printStackTrace();
+            logger.log(Level.WARNING, "Error verifying file closure", e);
           }
         }
       }

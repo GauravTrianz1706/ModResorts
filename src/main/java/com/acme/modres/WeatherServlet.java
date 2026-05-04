@@ -17,13 +17,13 @@ import java.util.Hashtable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.servlet.ServletException;
-import javax.servlet.ServletOutputStream;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import javax.management.InstanceAlreadyExistsException;
 import javax.management.InstanceNotFoundException;
 import javax.management.IntrospectionException;
@@ -37,7 +37,7 @@ import javax.management.ObjectName;
 import javax.management.ReflectionException;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
-import javax.servlet.annotation.WebServlet;
+import jakarta.servlet.annotation.WebServlet;
 
 @WebServlet({ "/resorts/weather" })
 public class WeatherServlet extends HttpServlet {
@@ -65,15 +65,14 @@ public class WeatherServlet extends HttpServlet {
     try {
       weatherON = new ObjectName("com.acme.modres.mbean:name=appInfo");
     } catch (MalformedObjectNameException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "Error creating ObjectName", e);
     }
     try {
       if (weatherON != null) {
         mbean = server.registerMBean(new AppInfo(), weatherON);
       }
     } catch (InstanceAlreadyExistsException | MBeanRegistrationException | NotCompliantMBeanException e) {
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "Error registering MBean", e);
     }
     context = setInitialContextProps();
   }
@@ -84,8 +83,7 @@ public class WeatherServlet extends HttpServlet {
       try {
         server.unregisterMBean(weatherON);
       } catch (MBeanRegistrationException | InstanceNotFoundException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
+        logger.log(Level.SEVERE, "Error unregistering MBean", e);
       }
     }
   }
@@ -100,7 +98,7 @@ public class WeatherServlet extends HttpServlet {
     try {
       MBeanInfo weatherConfig = server.getMBeanInfo(weatherON);
     } catch (IntrospectionException | InstanceNotFoundException | ReflectionException e) {
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "Error getting MBean info", e);
     }
 
     String city = request.getParameter("selectedCity");
@@ -250,18 +248,16 @@ public class WeatherServlet extends HttpServlet {
   }
 
   private String configureEnvDiscovery() {
-
-    String serverEnv = "";
-
-    serverEnv += com.ibm.websphere.runtime.ServerName.getDisplayName();
-    serverEnv += com.ibm.websphere.runtime.ServerName.getFullName();
-
+    // Removed IBM WebSphere specific APIs
+    // Return generic server information instead
+    String serverEnv = "Generic Application Server";
     return serverEnv;
   }
 
+  @SuppressWarnings("unchecked")
   private InitialContext setInitialContextProps() {
 
-    Hashtable ht = new Hashtable();
+    Hashtable<String, String> ht = new Hashtable<>();
 
     ht.put("java.naming.factory.initial", "com.ibm.websphere.naming.WsnInitialContextFactory");
     ht.put("java.naming.provider.url", "corbaloc:iiop:localhost:2809");
@@ -270,7 +266,7 @@ public class WeatherServlet extends HttpServlet {
     try {
       ctx = new InitialContext(ht);
     } catch (NamingException e) {
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "Error creating InitialContext", e);
     }
 
     return ctx;

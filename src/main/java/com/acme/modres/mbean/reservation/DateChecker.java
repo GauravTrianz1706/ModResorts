@@ -4,10 +4,14 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 
 import com.acme.modres.Constants;
 
 public class DateChecker implements Runnable {
+  private static final Logger logger = Logger.getLogger(DateChecker.class.getName());
+  
   ReservationCheckerData data;
   List<Reservation> reservations;
 
@@ -29,7 +33,7 @@ public class DateChecker implements Runnable {
           break;
         }
       } catch (ParseException ex) {
-        ex.printStackTrace();
+        logger.log(Level.SEVERE, "Error parsing date", ex);
       }
     }
     data.setAvailablility(true);

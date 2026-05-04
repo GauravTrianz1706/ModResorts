@@ -1,8 +1,9 @@
 package com.acme.modres.mbean.reservation;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 import com.acme.modres.Constants;
@@ -17,18 +18,25 @@ public class DateChecker implements Runnable {
   }
 
   public void run() {
+    // Use java.time API for date handling (UTC standardized)
+    DateTimeFormatter formatter = DateTimeFormatter.ofPattern(Constants.DATA_FORMAT);
+    
     for (int i = 0; i < reservations.size(); i++) {
       Reservation reservation = reservations.get(i);
-      Date selectedDate = data.getSelectedDate();
+      LocalDate selectedDate = data.getSelectedDate()
+          .toInstant()
+          .atZone(ZoneId.of("UTC"))
+          .toLocalDate();
 
       try {
-        Date fromDate = new SimpleDateFormat(Constants.DATA_FORMAT).parse(reservation.getFromDate());
-        Date toDate = new SimpleDateFormat(Constants.DATA_FORMAT).parse(reservation.getToDate());
-        if (selectedDate.after(fromDate) && selectedDate.before(toDate)) {
+        LocalDate fromDate = LocalDate.parse(reservation.getFromDate(), formatter);
+        LocalDate toDate = LocalDate.parse(reservation.getToDate(), formatter);
+        
+        if (selectedDate.isAfter(fromDate) && selectedDate.isBefore(toDate)) {
           data.setAvailablility(false);
           break;
         }
-      } catch (ParseException ex) {
+      } catch (DateTimeParseException ex) {
         ex.printStackTrace();
       }
     }

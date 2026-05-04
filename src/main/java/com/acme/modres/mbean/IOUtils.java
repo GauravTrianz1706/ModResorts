@@ -1,53 +1,59 @@
 package com.acme.modres.mbean;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 
 import com.acme.modres.mbean.reservation.ReservationList;
 import com.acme.modres.util.JsonInputStream;
 
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+
 public final class IOUtils {
 
-  public static File getFileFromRelativePath(String path) {
-    File file = null;
-    InputStream initialStream = null;
-    OutputStream outStream = null;
-    try {
-      initialStream = IOUtils.class.getClassLoader().getResourceAsStream(path);
-      byte[] buffer = new byte[initialStream.available()];
-      initialStream.read(buffer);
+  private static S3Client s3Client;
+  private static String s3BucketName;
+  
+  static {
+    // Initialize S3 client for cloud storage
+    s3Client = S3Client.builder()
+        .region(Region.of(System.getenv().getOrDefault("AWS_REGION", "us-east-1")))
+        .build();
+    s3BucketName = System.getenv().getOrDefault("S3_BUCKET_NAME", "modresorts-data");
+  }
 
-      file = File.createTempFile(path, null);
-      outStream = new FileOutputStream(file);
-      outStream.write(buffer);
-      outStream.close();
-    } catch (Exception e) {
-      e.printStackTrace();
-    } finally {
-      if (initialStream != null) {
-        try {
-          initialStream.close();
-        } catch (IOException e) {
-        }
-      } else if (outStream != null) {
-        try {
-          outStream.close();
-        } catch (IOException e) {
-        }
-      }
+  /**
+   * Get resource from classpath (preferred) or S3 as fallback
+   */
+  public static InputStream getResourceStream(String path) throws IOException {
+    // First try to load from classpath
+    InputStream classpathStream = IOUtils.class.getClassLoader().getResourceAsStream(path);
+    if (classpathStream != null) {
+      return classpathStream;
     }
-
-    return file;
+    
+    // Fallback to S3 if not in classpath
+    try {
+      GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+          .bucket(s3BucketName)
+          .key("config/" + path)
+          .build();
+      
+      ResponseInputStream<GetObjectResponse> s3Stream = s3Client.getObject(getObjectRequest);
+      return s3Stream;
+    } catch (Exception e) {
+      throw new IOException("Resource not found in classpath or S3: " + path, e);
+    }
   }
 
   public static OpMetadataList getOpListFromConfig() {
-    File file = getFileFromRelativePath("ops.json"); // fix hardcoded paths
-    try (JsonInputStream is = new JsonInputStream(file)) {
+    try (InputStream is = getResourceStream("ops.json");
+         JsonInputStream jis = new JsonInputStream(is)) {
       OpMetadataList opList = new OpMetadataList(); // empty default
-      opList = (OpMetadataList) is.parseJsonAs(OpMetadataList.class);
+      opList = (OpMetadataList) jis.parseJsonAs(OpMetadataList.class);
       return opList;
     } catch (IOException e) {
       e.printStackTrace();
@@ -56,10 +62,10 @@ public final class IOUtils {
   }
 
   public static ReservationList getReservationListFromConfig() {
-    File file = getFileFromRelativePath("reservations.json"); // fix hardcoded paths
-    try (JsonInputStream is = new JsonInputStream(file)) {
+    try (InputStream is = getResourceStream("reservations.json");
+         JsonInputStream jis = new JsonInputStream(is)) {
       ReservationList reservationList = new ReservationList(); // empty default
-      reservationList = (ReservationList) is.parseJsonAs(ReservationList.class);
+      reservationList = (ReservationList) jis.parseJsonAs(ReservationList.class);
       return reservationList;
     } catch (IOException e) {
       e.printStackTrace();

@@ -1,14 +1,24 @@
 package com.acme.modres.mbean.reservation;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 import com.acme.modres.Constants;
 
+/**
+ * ReservationCheckerData - holds the state for a single availability check.
+ *
+ * Migrated from java.util.Date / SimpleDateFormat to the java.time API
+ * (LocalDate / DateTimeFormatter) to eliminate timezone and clock
+ * synchronization issues in distributed cloud environments. Dates are
+ * parsed and stored as LocalDate values, which are timezone-independent
+ * and consistent across all cloud regions and container instances.
+ */
 public class ReservationCheckerData {
   private ReservationList reservations;
-  private Date selectedDate;
-  private boolean available; // changed from Boolean to boolean
+  private LocalDate selectedDate;
+  private boolean available;
 
   public ReservationCheckerData(ReservationList reservations) {
     this.reservations = reservations;
@@ -19,13 +29,16 @@ public class ReservationCheckerData {
     return reservations;
   }
 
-  public Date getSelectedDate() {
+  public LocalDate getSelectedDate() {
     return selectedDate;
   }
 
   public boolean setSelectedDate(String dateStr) {
     try {
-      selectedDate = new SimpleDateFormat(Constants.DATA_FORMAT).parse(dateStr);
+      DateTimeFormatter formatter = DateTimeFormatter.ofPattern(Constants.DATA_FORMAT);
+      selectedDate = LocalDate.parse(dateStr, formatter);
+    } catch (DateTimeParseException e) {
+      return false;
     } catch (Exception e) {
       return false;
     }
@@ -36,7 +49,7 @@ public class ReservationCheckerData {
     return available;
   }
 
-  public void setAvailablility(boolean available) { // fix parameter type
+  public void setAvailablility(boolean available) {
     this.available = available;
   }
 }

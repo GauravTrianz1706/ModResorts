@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  modresorts:
+    image: modresorts:latest
+    container_name: modresorts-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "9080:9080"
+      - "9443:9443"
+    environment:
+      - JAVA_OPTS=-Xmx512m -Xms256m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+      - TZ=UTC
+      # External service connections (provide at runtime)
+      - DB_HOST=${DB_HOST:-localhost}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-modresorts}
+      - DB_USER=${DB_USER:-modresorts}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - WEATHER_API_KEY=${WEATHER_API_KEY:-}
+    volumes:
+      - ./logs:/opt/ol/wlp/output/modresorts/logs
+      - ./config:/opt/ol/wlp/usr/servers/modresorts/config
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9080/resorts/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+networks:
+  app-network:
+    driver: bridge

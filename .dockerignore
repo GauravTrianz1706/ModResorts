@@ -1,0 +1,83 @@
+# Docker ignore file for ModResorts Java EE WAR application
+# Excludes build artifacts, wrapper scripts, IDE files, and sensitive data
+
+# Maven build output
+target/
+
+# Maven wrapper files (CRITICAL: never include in Docker build)
+mvnw
+mvnw.cmd
+.mvn/
+
+# Gradle wrapper files (CRITICAL: never include in Docker build)
+gradlew
+gradlew.bat
+gradle/
+gradle/wrapper/
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+README*
+CONTRIBUTING*
+LICENSE
+CODEOWNERS
+
+# IDE and editor files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+*.swp
+*.swo
+*~
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test files
+src/test/
+**/*Test.java
+**/*Tests.java
+**/*Spec.java
+
+# CI/CD
+.github/
+.travis.yml
+Jenkinsfile
+.circleci/
+
+# Scripts (not needed in image)
+scripts/
+
+# Deployment artifacts
+ecs/
+docs/
+migration-bundle/
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Environment files (never include secrets)
+.env
+.env.*
+*.env
+
+# Build configuration files not needed in image
+build.gradle.hideme

@@ -9,7 +9,9 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import com.ibm.websphere.servlet.response.ResponseUtils;
+// Replaced WebSphere-specific com.ibm.websphere.servlet.response.ResponseUtils with standard Java HTML encoding
+// blocker-2 (cz-java-0075): WebSphere Specific Features - migrated to Spring Boot standard abstractions
+// blocker-7 (cz-java-0081): Server and Dependencies - removed WebSphere server-specific dependency
 
 @WebServlet("/resorts/upper")
 public class UpperServlet extends HttpServlet {
@@ -26,9 +28,27 @@ public class UpperServlet extends HttpServlet {
     }
 
     String newStr = originalStr.toUpperCase();
-    newStr = ResponseUtils.encodeDataString(newStr);
+    // Replaced ResponseUtils.encodeDataString() with standard Java HTML encoding
+    // for container-native deployment on AWS ECS/EKS
+    newStr = encodeHtml(newStr);
 
     PrintWriter out = response.getWriter();
     out.print("<br/><b>upper case input " + newStr + "</b>");
+  }
+
+  /**
+   * Encodes special HTML characters to prevent XSS.
+   * Replaces WebSphere-specific ResponseUtils.encodeDataString().
+   */
+  private String encodeHtml(String input) {
+    if (input == null) {
+      return "";
+    }
+    return input
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&#x27;");
   }
 }

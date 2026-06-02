@@ -250,21 +250,30 @@ public class WeatherServlet extends HttpServlet {
   }
 
   private String configureEnvDiscovery() {
-
+    // blocker-3 (cz-java-0075): Replaced WebSphere-specific com.ibm.websphere.runtime.ServerName.getDisplayName()
+    // blocker-5 (cz-java-0080): Replaced WebSphere-specific com.ibm.websphere.runtime.ServerName.getFullName() (RMI)
+    // blocker-10 (cz-java-0081): Removed WebSphere server-specific dependency at line 266
+    // Migrated to environment variables for container-native deployment on AWS ECS/EKS
     String serverEnv = "";
 
-    serverEnv += com.ibm.websphere.runtime.ServerName.getDisplayName();
-    serverEnv += com.ibm.websphere.runtime.ServerName.getFullName();
+    serverEnv += System.getenv().getOrDefault("SERVER_DISPLAY_NAME", "modresorts-server");
+    serverEnv += System.getenv().getOrDefault("SERVER_FULL_NAME", "modresorts-server/default");
 
     return serverEnv;
   }
 
   private InitialContext setInitialContextProps() {
+    // blocker-8 (cz-java-0081): Replaced WebSphere-specific WsnInitialContextFactory (line 256)
+    // blocker-9 (cz-java-0081): Replaced WebSphere-specific corbaloc:iiop JNDI provider URL (line 257)
+    // Migrated to standard JNDI InitialContext for container-native deployment on AWS ECS/EKS
+    // Service discovery is handled via environment variables and AWS Cloud Map
+    Hashtable<String, String> ht = new Hashtable<>();
 
-    Hashtable ht = new Hashtable();
+    String jndiFactory = System.getenv().getOrDefault("JNDI_FACTORY", "com.sun.jndi.rmi.registry.RegistryContextFactory");
+    String jndiProviderUrl = System.getenv().getOrDefault("JNDI_PROVIDER_URL", "rmi://localhost:1099");
 
-    ht.put("java.naming.factory.initial", "com.ibm.websphere.naming.WsnInitialContextFactory");
-    ht.put("java.naming.provider.url", "corbaloc:iiop:localhost:2809");
+    ht.put("java.naming.factory.initial", jndiFactory);
+    ht.put("java.naming.provider.url", jndiProviderUrl);
 
     InitialContext ctx = null;
     try {

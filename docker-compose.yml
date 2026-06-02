@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  modresorts:
+    image: modresorts:latest
+    container_name: modresorts-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      # Application environment
+      - TZ=UTC
+      - JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+      # Weather API configuration
+      - WEATHER_API_KEY=${WEATHER_API_KEY:-}
+      # Server identity (replaces WebSphere-specific server name APIs)
+      - SERVER_DISPLAY_NAME=${SERVER_DISPLAY_NAME:-modresorts-server}
+      - SERVER_FULL_NAME=${SERVER_FULL_NAME:-modresorts-server/default}
+      # JNDI configuration (standard, replaces WebSphere WsnInitialContextFactory)
+      - JNDI_FACTORY=${JNDI_FACTORY:-com.sun.jndi.rmi.registry.RegistryContextFactory}
+      - JNDI_PROVIDER_URL=${JNDI_PROVIDER_URL:-rmi://localhost:1099}
+      # Database configuration (external - provide via environment)
+      - DB_HOST=${DB_HOST:-localhost}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-modresorts}
+      - DB_USERNAME=${DB_USERNAME:-modresorts}
+      - DB_PASSWORD=${DB_PASSWORD:-}
+    volumes:
+      - ./config:/opt/tomcat/conf/custom:ro
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  app-network:
+    driver: bridge

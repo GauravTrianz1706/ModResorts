@@ -39,6 +39,26 @@ import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import javax.servlet.annotation.WebServlet;
 
+/**
+ * Weather servlet migrated for Azure cloud deployment.
+ * 
+ * Cloud-native changes:
+ * - API keys externalized to environment variables (should be stored in Azure Key Vault)
+ * - Removed WebSphere-specific dependencies
+ * - Ready for Azure App Service deployment
+ * 
+ * Azure Key Vault Integration (recommended):
+ * 1. Store WEATHER_API_KEY in Azure Key Vault
+ * 2. Use Managed Identity to access Key Vault
+ * 3. Reference secrets via environment variables or Azure App Configuration
+ * 
+ * Example Azure Key Vault setup:
+ * - Create Key Vault: az keyvault create --name myKeyVault --resource-group myRG
+ * - Store secret: az keyvault secret set --vault-name myKeyVault --name WEATHER-API-KEY --value "your-api-key"
+ * - Enable Managed Identity on App Service
+ * - Grant App Service access to Key Vault
+ * - Reference in App Service: @Microsoft.KeyVault(SecretUri=https://myKeyVault.vault.azure.net/secrets/WEATHER-API-KEY/)
+ */
 @WebServlet({ "/resorts/weather" })
 public class WeatherServlet extends HttpServlet {
   private static final long serialVersionUID = 1L;
@@ -46,9 +66,9 @@ public class WeatherServlet extends HttpServlet {
   @Inject
   private ModResortsCustomerInformation customerInfo;
 
-  // local OS environment variable key name. The key value should provide an API
-  // key that will be used to
-  // get weather information from site: http://www.wunderground.com
+  // Environment variable key name for Weather API key
+  // In Azure, this should be configured in App Service Application Settings
+  // and sourced from Azure Key Vault using Key Vault references
   private static final String WEATHER_API_KEY = "WEATHER_API_KEY";
 
   private static final Logger logger = Logger.getLogger(WeatherServlet.class.getName());
@@ -65,16 +85,17 @@ public class WeatherServlet extends HttpServlet {
     try {
       weatherON = new ObjectName("com.acme.modres.mbean:name=appInfo");
     } catch (MalformedObjectNameException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "Failed to create MBean ObjectName", e);
     }
     try {
       if (weatherON != null) {
         mbean = server.registerMBean(new AppInfo(), weatherON);
       }
     } catch (InstanceAlreadyExistsException | MBeanRegistrationException | NotCompliantMBeanException e) {
-      e.printStackTrace();
+      logger.log(Level.WARNING, "Failed to register MBean", e);
     }
+    
+    // Initialize context without WebSphere-specific properties for cloud compatibility
     context = setInitialContextProps();
   }
 
@@ -84,8 +105,7 @@ public class WeatherServlet extends HttpServlet {
       try {
         server.unregisterMBean(weatherON);
       } catch (MBeanRegistrationException | InstanceNotFoundException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
+        logger.log(Level.WARNING, "Failed to unregister MBean", e);
       }
     }
   }
@@ -100,12 +120,16 @@ public class WeatherServlet extends HttpServlet {
     try {
       MBeanInfo weatherConfig = server.getMBeanInfo(weatherON);
     } catch (IntrospectionException | InstanceNotFoundException | ReflectionException e) {
-      e.printStackTrace();
+      logger.log(Level.WARNING, "Failed to get MBean info", e);
     }
 
     String city = request.getParameter("selectedCity");
     logger.log(Level.FINE, "requested city is " + city);
 
+    // Retrieve API key from environment variable
+    // In Azure App Service, configure this in Application Settings
+    // Best practice: Use Azure Key Vault reference format:
+    // @Microsoft.KeyVault(SecretUri=https://myvault.vault.azure.net/secrets/WEATHER-API-KEY/)
     String weatherAPIKey = System.getenv(WEATHER_API_KEY);
     String mockedKey = mockKey(weatherAPIKey);
     logger.log(Level.FINE, "weatherAPIKey is " + mockedKey);
@@ -115,7 +139,9 @@ public class WeatherServlet extends HttpServlet {
       getRealTimeWeatherData(city, weatherAPIKey, response);
     } else {
       logger.info(
-          "weatherAPIKey is not found, will provide the weather data dated August 10th, 2018 for the city " + city);
+          "weatherAPIKey is not found in environment variables. Using default weather data for the city " + city);
+      logger.info("For production: Configure WEATHER_API_KEY in Azure App Service Application Settings");
+      logger.info("Recommended: Store in Azure Key Vault and reference via @Microsoft.KeyVault(SecretUri=...)");
       getDefaultWeatherData(city, response);
     }
   }
@@ -249,28 +275,34 @@ public class WeatherServlet extends HttpServlet {
     return "*********" + lastToKeep;
   }
 
+  /**
+   * Removed WebSphere-specific server name discovery for cloud compatibility.
+   * In Azure, use environment variables or Azure App Configuration for environment discovery.
+   * 
+   * @deprecated WebSphere-specific, not compatible with cloud environments
+   */
+  @Deprecated
   private String configureEnvDiscovery() {
-
-    String serverEnv = "";
-
-    serverEnv += com.ibm.websphere.runtime.ServerName.getDisplayName();
-    serverEnv += com.ibm.websphere.runtime.ServerName.getFullName();
-
+    // Cloud-native alternative: Use environment variables
+    String serverEnv = System.getenv("ENVIRONMENT"); // e.g., "dev", "staging", "production"
+    if (serverEnv == null) {
+      serverEnv = System.getProperty("app.environment", "unknown");
+    }
     return serverEnv;
   }
 
+  /**
+   * Initialize JNDI context with cloud-compatible settings.
+   * Removed WebSphere-specific JNDI configuration.
+   */
   private InitialContext setInitialContextProps() {
-
-    Hashtable ht = new Hashtable();
-
-    ht.put("java.naming.factory.initial", "com.ibm.websphere.naming.WsnInitialContextFactory");
-    ht.put("java.naming.provider.url", "corbaloc:iiop:localhost:2809");
-
     InitialContext ctx = null;
     try {
-      ctx = new InitialContext(ht);
+      // Use default JNDI context for cloud environments
+      // Cloud platforms (Azure App Service, AKS) provide their own JNDI implementations
+      ctx = new InitialContext();
     } catch (NamingException e) {
-      e.printStackTrace();
+      logger.log(Level.WARNING, "Failed to create InitialContext. JNDI may not be available in this environment.", e);
     }
 
     return ctx;

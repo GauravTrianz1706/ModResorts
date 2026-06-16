@@ -2,127 +2,202 @@
 <project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <modelVersion>4.0.0</modelVersion>
+  
+  <!-- Spring Boot Parent for cloud-native deployment -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>2.7.18</version>
+    <relativePath/>
+  </parent>
+  
   <groupId>com.acme.modres</groupId>
   <artifactId>modresorts</artifactId>
   <version>2.0.0</version>
-  <packaging>war</packaging>
+  <packaging>jar</packaging>
   <name>ModResorts</name>
+  <description>ModResorts application migrated for Azure cloud deployment</description>
+  
   <properties>
     <maven.compiler.target>1.8</maven.compiler.target>
     <maven.compiler.source>1.8</maven.compiler.source>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.version>2.0.0</project.version>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <azure.version>3.22.0</azure.version>
   </properties>
+  
   <dependencies>
+    <!-- Spring Boot Web Starter with embedded Tomcat -->
     <dependency>
-      <groupId>javax</groupId>
-      <artifactId>javaee-api</artifactId>
-      <version>7.0</version>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    
+    <!-- Spring Boot Data JPA for database access -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    
+    <!-- Azure Spring Boot Starter for Azure integration -->
+    <dependency>
+      <groupId>com.azure.spring</groupId>
+      <artifactId>azure-spring-boot-starter</artifactId>
+      <version>${azure.version}</version>
+    </dependency>
+    
+    <!-- Azure Key Vault Secrets Spring Boot Starter -->
+    <dependency>
+      <groupId>com.azure.spring</groupId>
+      <artifactId>azure-spring-boot-starter-keyvault-secrets</artifactId>
+      <version>${azure.version}</version>
+    </dependency>
+    
+    <!-- Azure Storage Blob for cloud storage -->
+    <dependency>
+      <groupId>com.azure</groupId>
+      <artifactId>azure-storage-blob</artifactId>
+      <version>12.25.0</version>
+    </dependency>
+    
+    <!-- Azure Identity for Managed Identity authentication -->
+    <dependency>
+      <groupId>com.azure</groupId>
+      <artifactId>azure-identity</artifactId>
+      <version>1.11.1</version>
+    </dependency>
+    
+    <!-- HikariCP connection pool (included in spring-boot-starter-data-jpa) -->
+    <!-- Explicitly declared for visibility -->
+    <dependency>
+      <groupId>com.zaxxer</groupId>
+      <artifactId>HikariCP</artifactId>
+    </dependency>
+    
+    <!-- SQL Server JDBC driver for Azure SQL -->
+    <dependency>
+      <groupId>com.microsoft.sqlserver</groupId>
+      <artifactId>mssql-jdbc</artifactId>
+      <version>12.4.2.jre8</version>
+    </dependency>
+    
+    <!-- Servlet API (provided by Spring Boot) -->
+    <dependency>
+      <groupId>javax.servlet</groupId>
+      <artifactId>javax.servlet-api</artifactId>
+      <version>4.0.1</version>
       <scope>provided</scope>
     </dependency>
+    
+    <!-- CDI API for dependency injection -->
     <dependency>
-      <groupId>com.ibm.websphere.appserver</groupId>
-      <artifactId>was_public</artifactId>
-      <version>9.0.0</version>
-      <scope>provided</scope>
+      <groupId>javax.inject</groupId>
+      <artifactId>javax.inject</artifactId>
+      <version>1</version>
     </dependency>
+    
+    <!-- Gson for JSON processing -->
     <dependency>
       <groupId>com.google.code.gson</groupId>
       <artifactId>gson</artifactId>
       <version>2.10.1</version>
     </dependency>
+    
+    <!-- Logging -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-logging</artifactId>
+    </dependency>
+    
+    <!-- Azure Application Insights for monitoring -->
+    <dependency>
+      <groupId>com.microsoft.azure</groupId>
+      <artifactId>applicationinsights-spring-boot-starter</artifactId>
+      <version>2.6.4</version>
+    </dependency>
+    
+    <!-- Test dependencies -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
-      <version>5.10.0</version>
       <scope>test</scope>
     </dependency>
+    
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
-      <version>5.11.0</version>
       <scope>test</scope>
     </dependency>
+    
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-junit-jupiter</artifactId>
-      <version>5.8.0</version>
       <scope>test</scope>
     </dependency>
-    <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-test</artifactId>
-      <version>5.3.20</version>
-      <scope>test</scope>
-    </dependency>
-
-   
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-core</artifactId>
-      <version>2.14.1</version>
-    </dependency>
-
-   
-    <dependency>
-      <groupId>commons-collections</groupId>
-      <artifactId>commons-collections</artifactId>
-      <version>3.2.1</version>
-    </dependency>
-
-    
-    <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-webmvc</artifactId>
-      <version>5.3.17</version>
-    </dependency>
-
-   
-    <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
-      <version>2.9.10</version>
-    </dependency>
-
   </dependencies>
+  
   <build>
     <plugins>
+      <!-- Spring Boot Maven Plugin for executable JAR -->
       <plugin>
-        <artifactId>maven-war-plugin</artifactId>
-        <version>3.1.0</version>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
-          <failOnMissingWebXml>false</failOnMissingWebXml>
-          <packagingExcludes>pom.xml, src/, target/, WebContent/</packagingExcludes>
-          <warSourceDirectory>WebContent</warSourceDirectory>
-          <webResources>
-            <resource>
-              <directory>src/main/resources</directory>
-              <targetPath>WEB-INF/classes</targetPath>
-            </resource>
-          </webResources>
+          <mainClass>com.acme.modres.ModResortsApplication</mainClass>
         </configuration>
-      </plugin>
-      <plugin>
-        <artifactId>maven-resources-plugin</artifactId>
-        <version>3.2.0</version>
         <executions>
           <execution>
-            <id>copy-resources</id>
-            <phase>package</phase>
             <goals>
-              <goal>copy-resources</goal>
+              <goal>repackage</goal>
             </goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}</outputDirectory>
-              <resources>
-                <resource>
-                  <directory>src/main/resources</directory>
-                </resource>
-              </resources>
-            </configuration>
           </execution>
         </executions>
+      </plugin>
+      
+      <!-- Maven Compiler Plugin -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <source>1.8</source>
+          <target>1.8</target>
+        </configuration>
+      </plugin>
+      
+      <!-- Azure Web App Maven Plugin for deployment -->
+      <plugin>
+        <groupId>com.microsoft.azure</groupId>
+        <artifactId>azure-webapp-maven-plugin</artifactId>
+        <version>2.12.0</version>
+        <configuration>
+          <schemaVersion>v2</schemaVersion>
+          <resourceGroup>modresorts-rg</resourceGroup>
+          <appName>modresorts-app</appName>
+          <region>eastus</region>
+          <pricingTier>P1v2</pricingTier>
+          <runtime>
+            <os>Linux</os>
+            <javaVersion>Java 8</javaVersion>
+            <webContainer>Java SE</webContainer>
+          </runtime>
+          <deployment>
+            <resources>
+              <resource>
+                <directory>${project.basedir}/target</directory>
+                <includes>
+                  <include>*.jar</include>
+                </includes>
+              </resource>
+            </resources>
+          </deployment>
+        </configuration>
       </plugin>
     </plugins>
   </build>

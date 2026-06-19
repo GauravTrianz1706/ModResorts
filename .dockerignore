@@ -1,0 +1,55 @@
+# Exclude build artifacts
+target/
+build/
+*.war
+*.jar
+*.class
+
+# Exclude version control
+.git/
+.gitignore
+.gitattributes
+
+# Exclude IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+
+# Exclude Maven wrapper (use system Maven)
+mvnw
+mvnw.cmd
+.mvn/
+
+# Exclude Gradle wrapper (use system Gradle)
+gradlew
+gradlew.bat
+gradle/wrapper/
+
+# Exclude documentation
+*.md
+README*
+LICENSE
+CONTRIBUTING*
+CODEOWNERS
+
+# Exclude test files
+src/test/
+
+# Exclude OS files
+.DS_Store
+Thumbs.db
+
+# Exclude logs
+*.log
+logs/
+
+# Exclude temporary files
+*.tmp
+*.bak
+*.swp
+*~

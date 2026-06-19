@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  modresorts:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: modresorts:latest
+    container_name: modresorts-app
+    ports:
+      - "8080:8080"
+    environment:
+      - JAVA_OPTS=-Xmx512m -Xms256m -XX:+UseContainerSupport
+      - TZ=UTC
+      # Add external service connections as needed
+      # - DATABASE_URL=${DATABASE_URL}
+      # - DATABASE_USERNAME=${DATABASE_USERNAME}
+      # - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  app-network:
+    driver: bridge

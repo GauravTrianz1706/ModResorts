@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.logging.Logger;
+import java.util.logging.Level;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import java.text.ParseException;
@@ -14,11 +15,11 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import javax.naming.InitialContext;
-import javax.servlet.ServletException;
-import javax.servlet.annotation.WebServlet;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import com.acme.modres.mbean.IOUtils;
 import com.acme.modres.mbean.reservation.DateChecker;
@@ -70,7 +71,7 @@ public class AvailabilityCheckerServlet extends HttpServlet {
             break;
           }
         } catch (ParseException ex) {
-          ex.printStackTrace();
+          logger.log(Level.SEVERE, "Failed to parse date", ex);
         }
       }
 
@@ -104,12 +105,11 @@ public class AvailabilityCheckerServlet extends HttpServlet {
     String userDirectory = System.getProperty("user.home");
     String zipPath = userDirectory + "/reservations.zip";
 
-    FileOutputStream fos;
-    try {
-      fos = new FileOutputStream(zipPath);
-      ZipOutputStream zipOut = new ZipOutputStream(fos);
-
-      FileInputStream fis = new FileInputStream(fileToZip);
+    // Using try-with-resources for automatic resource management
+    try (FileOutputStream fos = new FileOutputStream(zipPath);
+         ZipOutputStream zipOut = new ZipOutputStream(fos);
+         FileInputStream fis = new FileInputStream(fileToZip)) {
+      
       ZipEntry zipEntry = new ZipEntry(fileToZip.getName());
       zipOut.putNextEntry(zipEntry);
 
@@ -118,10 +118,6 @@ public class AvailabilityCheckerServlet extends HttpServlet {
       while ((length = fis.read(bytes)) >= 0) {
         zipOut.write(bytes, 0, length);
       }
-      fis.close();
-
-      zipOut.close();
-      fos.close();
 
       // verify zip
       ZipValidator zipValidator = new ZipValidator(new File(zipPath));
@@ -129,14 +125,11 @@ public class AvailabilityCheckerServlet extends HttpServlet {
         return 0;
       }
     } catch (FileNotFoundException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "File not found", e);
     } catch (IOException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "IO error during export", e);
     } catch (Throwable e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "Unexpected error during export", e);
     }
     return -1;
   }

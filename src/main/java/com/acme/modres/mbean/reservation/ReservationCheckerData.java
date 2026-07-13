@@ -2,10 +2,14 @@ package com.acme.modres.mbean.reservation;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 
 import com.acme.modres.Constants;
 
 public class ReservationCheckerData {
+  private static final Logger logger = Logger.getLogger(ReservationCheckerData.class.getName());
+  
   private ReservationList reservations;
   private Date selectedDate;
   private boolean available; // changed from Boolean to boolean
@@ -27,6 +31,7 @@ public class ReservationCheckerData {
     try {
       selectedDate = new SimpleDateFormat(Constants.DATA_FORMAT).parse(dateStr);
     } catch (Exception e) {
+      logger.log(Level.WARNING, "Failed to parse date: " + dateStr, e);
       return false;
     }
     return true;

@@ -3,6 +3,7 @@ package com.acme.modres;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -61,29 +62,24 @@ public class DefaultWeatherData {
 
     logger.log(Level.FINE, "dataFileName: " + dataFileName);
 
-    InputStream inputStream = null;
-
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    try {
-      inputStream = getClass().getClassLoader().getResourceAsStream(dataFileName);
+    // Using try-with-resources for automatic resource management
+    try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream(dataFileName);
+         ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      
+      if (inputStream == null) {
+        throw new IOException("Resource not found: " + dataFileName);
+      }
+      
       byte[] buf = new byte[4096];
-      for (int n; 0 < (n = inputStream.read(buf));) {
+      int n;
+      while ((n = inputStream.read(buf)) > 0) {
         out.write(buf, 0, n);
       }
-    } finally {
-      out.close();
 
-      if (inputStream != null) {
-        inputStream.close();
-      }
-      inputStream = null;
+      String resultStr = new String(out.toByteArray(), StandardCharsets.UTF_8);
+      logger.log(Level.FINEST, "resultStr: " + resultStr);
+      return resultStr;
     }
-
-    String resultStr = new String(out.toByteArray(), "UTF-8");
-    logger.log(Level.FINEST, "resultStr: " + resultStr);
-    out = null;
-    return resultStr;
-
   }
 
 }

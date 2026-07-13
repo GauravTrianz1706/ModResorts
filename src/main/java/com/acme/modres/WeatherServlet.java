@@ -5,7 +5,6 @@ import com.acme.modres.exception.ExceptionHandler;
 import com.acme.modres.mbean.AppInfo;
 
 import java.io.BufferedReader;
-
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
@@ -13,17 +12,19 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.ProtocolException;
 import java.net.URL;
-import java.util.Hashtable;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.servlet.ServletException;
-import javax.servlet.ServletOutputStream;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.inject.Inject;
+import jakarta.servlet.annotation.WebServlet;
 
-import javax.inject.Inject;
 import javax.management.InstanceAlreadyExistsException;
 import javax.management.InstanceNotFoundException;
 import javax.management.IntrospectionException;
@@ -37,7 +38,6 @@ import javax.management.ObjectName;
 import javax.management.ReflectionException;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
-import javax.servlet.annotation.WebServlet;
 
 @WebServlet({ "/resorts/weather" })
 public class WeatherServlet extends HttpServlet {
@@ -65,15 +65,14 @@ public class WeatherServlet extends HttpServlet {
     try {
       weatherON = new ObjectName("com.acme.modres.mbean:name=appInfo");
     } catch (MalformedObjectNameException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "Failed to create ObjectName", e);
     }
     try {
       if (weatherON != null) {
         mbean = server.registerMBean(new AppInfo(), weatherON);
       }
     } catch (InstanceAlreadyExistsException | MBeanRegistrationException | NotCompliantMBeanException e) {
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "Failed to register MBean", e);
     }
     context = setInitialContextProps();
   }
@@ -84,8 +83,7 @@ public class WeatherServlet extends HttpServlet {
       try {
         server.unregisterMBean(weatherON);
       } catch (MBeanRegistrationException | InstanceNotFoundException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
+        logger.log(Level.SEVERE, "Failed to unregister MBean", e);
       }
     }
   }
@@ -100,7 +98,7 @@ public class WeatherServlet extends HttpServlet {
     try {
       MBeanInfo weatherConfig = server.getMBeanInfo(weatherON);
     } catch (IntrospectionException | InstanceNotFoundException | ReflectionException e) {
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "Failed to get MBean info", e);
     }
 
     String city = request.getParameter("selectedCity");
@@ -166,34 +164,23 @@ public class WeatherServlet extends HttpServlet {
 
     if (responseCode >= 200 && responseCode < 300) {
 
-      BufferedReader in = null;
-      ServletOutputStream out = null;
-
-      try {
-        in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+      // Using try-with-resources for automatic resource management
+      try (BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+           ServletOutputStream out = response.getOutputStream()) {
+        
         String inputLine = null;
-        StringBuffer responseStr = new StringBuffer();
+        StringBuilder responseStr = new StringBuilder();
 
         while ((inputLine = in.readLine()) != null) {
           responseStr.append(inputLine);
         }
 
         response.setContentType("application/json");
-        out = response.getOutputStream();
         out.print(responseStr.toString());
         logger.log(Level.FINE, "responseStr: " + responseStr);
       } catch (Exception e) {
         String errorMsg = "Problem occured when processing the weather server response.";
         ExceptionHandler.handleException(e, errorMsg, logger);
-      } finally {
-        if (in != null) {
-          in.close();
-        }
-        if (out != null) {
-          out.close();
-        }
-        in = null;
-        out = null;
       }
     } else {
       String errorMsg = "REST API call " + resturl + " returns an error response: " + responseCode;
@@ -211,24 +198,15 @@ public class WeatherServlet extends HttpServlet {
       ExceptionHandler.handleException(e, e.getMessage(), logger);
     }
 
-    ServletOutputStream out = null;
-
-    try {
+    // Using try-with-resources for automatic resource management
+    try (ServletOutputStream out = response.getOutputStream()) {
       String responseStr = defaultWeatherData.getDefaultWeatherData();
       response.setContentType("application/json");
-      out = response.getOutputStream();
       out.print(responseStr.toString());
       logger.log(Level.FINEST, "responseStr: " + responseStr);
     } catch (Exception e) {
       String errorMsg = "Problem occured when getting the default weather data.";
       ExceptionHandler.handleException(e, errorMsg, logger);
-    } finally {
-
-      if (out != null) {
-        out.close();
-      }
-
-      out = null;
     }
   }
 
@@ -250,27 +228,25 @@ public class WeatherServlet extends HttpServlet {
   }
 
   private String configureEnvDiscovery() {
-
+    // IBM WebSphere specific code removed for Java 17 compatibility
+    // This method would need to be reimplemented based on the target runtime environment
     String serverEnv = "";
-
-    serverEnv += com.ibm.websphere.runtime.ServerName.getDisplayName();
-    serverEnv += com.ibm.websphere.runtime.ServerName.getFullName();
-
+    logger.warning("IBM WebSphere specific discovery not available in Java 17 migration");
     return serverEnv;
   }
 
   private InitialContext setInitialContextProps() {
-
-    Hashtable ht = new Hashtable();
-
-    ht.put("java.naming.factory.initial", "com.ibm.websphere.naming.WsnInitialContextFactory");
-    ht.put("java.naming.provider.url", "corbaloc:iiop:localhost:2809");
+    // Using HashMap instead of raw Hashtable for type safety
+    Map<String, String> props = new HashMap<>();
+    props.put("java.naming.factory.initial", "com.ibm.websphere.naming.WsnInitialContextFactory");
+    props.put("java.naming.provider.url", "corbaloc:iiop:localhost:2809");
 
     InitialContext ctx = null;
     try {
-      ctx = new InitialContext(ht);
+      // Note: This is WebSphere-specific and may need adjustment for other app servers
+      ctx = new InitialContext(new java.util.Hashtable<>(props));
     } catch (NamingException e) {
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "Failed to create InitialContext", e);
     }
 
     return ctx;

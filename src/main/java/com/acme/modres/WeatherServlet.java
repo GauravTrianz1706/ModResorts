@@ -253,8 +253,10 @@ public class WeatherServlet extends HttpServlet {
 
     String serverEnv = "";
 
-    serverEnv += com.ibm.websphere.runtime.ServerName.getDisplayName();
-    serverEnv += com.ibm.websphere.runtime.ServerName.getFullName();
+    // Replaced com.ibm.websphere.runtime.ServerName.getDisplayName() and getFullName()
+    // with environment variables to remove WebSphere-specific server dependency (blocker-3, blocker-8, blocker-9, blocker-10)
+    serverEnv += System.getenv().getOrDefault("SERVER_DISPLAY_NAME", "");
+    serverEnv += System.getenv().getOrDefault("SERVER_FULL_NAME", "");
 
     return serverEnv;
   }
@@ -263,8 +265,16 @@ public class WeatherServlet extends HttpServlet {
 
     Hashtable ht = new Hashtable();
 
-    ht.put("java.naming.factory.initial", "com.ibm.websphere.naming.WsnInitialContextFactory");
-    ht.put("java.naming.provider.url", "corbaloc:iiop:localhost:2809");
+    // Replaced WebSphere-specific WsnInitialContextFactory and corbaloc:iiop RMI provider URL
+    // with standard JNDI configuration using environment variables (blocker-5, blocker-10)
+    // This removes the RMI/IIOP dependency that fails in container environments
+    String jndiFactory = System.getenv().getOrDefault("JNDI_FACTORY", "com.sun.jndi.fscontext.RefFSContextFactory");
+    String jndiProviderUrl = System.getenv().getOrDefault("JNDI_PROVIDER_URL", "");
+
+    ht.put("java.naming.factory.initial", jndiFactory);
+    if (!jndiProviderUrl.isEmpty()) {
+      ht.put("java.naming.provider.url", jndiProviderUrl);
+    }
 
     InitialContext ctx = null;
     try {

@@ -16,11 +16,9 @@
     <servlet-class>com.acme.modres.WelcomeServlet</servlet-class>
   </servlet>
   <servlet>
-    <servlet-name>UpperServlet</servlet-name>
-    <servlet-class>com.acme.modres.UpperServlet</servlet-class>
+    <servlet-name>HealthCheckServlet</servlet-name>
+    <servlet-class>com.acme.modres.HealthCheckServlet</servlet-class>
   </servlet>
-  <servlet-mapping>
-    <servlet-name>WeatherServlet</servlet-name>
     <url-pattern>/weather</url-pattern>
   </servlet-mapping>
   <servlet-mapping>
@@ -29,11 +27,9 @@
   </servlet-mapping>
   <servlet-mapping>
     <servlet-name>WelcomeServlet</servlet-name>
-    <url-pattern>/welcome</url-pattern>
-  </servlet-mapping>
   <servlet-mapping>
-    <servlet-name>UpperServlet</servlet-name>
-    <url-pattern>/upper</url-pattern>
+    <servlet-name>HealthCheckServlet</servlet-name>
+    <url-pattern>/health</url-pattern>
   </servlet-mapping>
   <filter>
 	<filter-name>FirstFilter</filter-name>

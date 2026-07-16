@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  modresorts:
+    image: modresorts:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: modresorts
+    ports:
+      - "9080:9080"
+    environment:
+      - TZ=UTC
+      - JAVA_OPTS=-Xmx512m -Xms256m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+      - WEATHER_API_KEY=${WEATHER_API_KEY:-}
+      - JNDI_FACTORY=${JNDI_FACTORY:-com.sun.jndi.fscontext.RefFSContextFactory}
+      - JNDI_PROVIDER_URL=${JNDI_PROVIDER_URL:-}
+      - SERVER_DISPLAY_NAME=${SERVER_DISPLAY_NAME:-modresorts}
+      - SERVER_FULL_NAME=${SERVER_FULL_NAME:-modresorts}
+    volumes:
+      - modresorts-logs:/opt/ol/wlp/output/modresorts/logs
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9080/resorts/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  modresorts-logs:
+    driver: local

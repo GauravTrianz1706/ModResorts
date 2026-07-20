@@ -1,51 +1,57 @@
 package com.acme.modres.util;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 
 import com.google.gson.Gson;
 
-public class JsonInputStream extends FileInputStream {
+/**
+ * Cloud-compatible JSON input stream that works with any InputStream
+ * No longer depends on File objects for cloud compatibility
+ */
+public class JsonInputStream extends InputStream {
 
-  private File file;
+  private InputStream inputStream;
 
-  public JsonInputStream(File file) throws FileNotFoundException {
-    super(file);
-    this.file = file;
+  public JsonInputStream(InputStream inputStream) {
+    this.inputStream = inputStream;
+  }
+
+  @Override
+  public int read() throws IOException {
+    return inputStream.read();
+  }
+
+  @Override
+  public int read(byte[] b) throws IOException {
+    return inputStream.read(b);
+  }
+
+  @Override
+  public int read(byte[] b, int off, int len) throws IOException {
+    return inputStream.read(b, off, len);
+  }
+
+  @Override
+  public void close() throws IOException {
+    if (inputStream != null) {
+      inputStream.close();
+    }
   }
 
   public Object parseJsonAs(Class<?> cls) {
-    if (file.exists()) {
-      JsonInputStream is = null;
-      Object jsonObject = null;
-      try {
-        is = new JsonInputStream(file);
-        Gson gson = new Gson();
-        BufferedReader reader = new BufferedReader(new InputStreamReader(is));
-        jsonObject = gson.fromJson(reader, cls);
-      } catch (Exception e) {
-        e.printStackTrace();
-      } catch (Throwable e) {
-        e.printStackTrace();
-      } finally {
-        if (is != null) {
-          try {
-            is.close();
-            is.read(); // test if file is closed
-          } catch (IOException e) {
-            // closed successfully
-            return jsonObject;
-          } catch (Throwable e) {
-            e.printStackTrace();
-          }
-        }
-      }
+    Object jsonObject = null;
+    try {
+      Gson gson = new Gson();
+      BufferedReader reader = new BufferedReader(new InputStreamReader(this));
+      jsonObject = gson.fromJson(reader, cls);
+    } catch (Exception e) {
+      System.err.println("Failed to parse JSON: " + e.getMessage());
+      e.printStackTrace();
     }
-    return null;
+    return jsonObject;
   }
 
 }

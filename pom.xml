@@ -69,6 +69,13 @@
       <version>${spring.boot.version}</version>
     </dependency>
 
+    <!-- Spring Boot Starter Actuator — for health check endpoints
+         (supports container orchestration health/liveness/readiness probes) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
     <!-- AWS SDK v2: Amazon S3 — replaces local file system operations
          (fixes cr-java-0061, cr-java-0062, cr-java-0063, cr-java-0112) -->
     <dependency>

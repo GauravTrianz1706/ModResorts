@@ -1,70 +1,57 @@
 package com.acme.modres.mbean;
 
-import java.io.File;
-import java.io.FileOutputStream;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.InputStreamReader;
+import java.util.logging.Logger;
 
 import com.acme.modres.mbean.reservation.ReservationList;
-import com.acme.modres.util.JsonInputStream;
+import com.google.gson.Gson;
 
+/**
+ * Utility class for reading configuration resources.
+ * Migrated from local file system writes (FileOutputStream / createTempFile)
+ * to in-memory classpath resource reading to ensure cloud compatibility.
+ * In cloud/containerized environments the local file system is ephemeral;
+ * writing temp files there risks data loss on container restart.
+ */
 public final class IOUtils {
 
-  public static File getFileFromRelativePath(String path) {
-    File file = null;
-    InputStream initialStream = null;
-    OutputStream outStream = null;
-    try {
-      initialStream = IOUtils.class.getClassLoader().getResourceAsStream(path);
-      byte[] buffer = new byte[initialStream.available()];
-      initialStream.read(buffer);
+  private static final Logger logger = Logger.getLogger(IOUtils.class.getName());
 
-      file = File.createTempFile(path, null);
-      outStream = new FileOutputStream(file);
-      outStream.write(buffer);
-      outStream.close();
-    } catch (Exception e) {
-      e.printStackTrace();
-    } finally {
-      if (initialStream != null) {
-        try {
-          initialStream.close();
-        } catch (IOException e) {
-        }
-      } else if (outStream != null) {
-        try {
-          outStream.close();
-        } catch (IOException e) {
-        }
-      }
+  /**
+   * Reads a classpath resource and parses it as the given type using Gson.
+   * Replaces the previous implementation that wrote the resource bytes to a
+   * local temp file (File.createTempFile + FileOutputStream) before reading —
+   * a pattern that is unsafe in cloud/containerised environments.
+   *
+   * @param path the classpath-relative resource path (e.g. "ops.json")
+   * @param cls  the target class to deserialise into
+   * @return the deserialised object, or {@code null} on error
+   */
+  private static <T> T parseClasspathResourceAsJson(String path, Class<T> cls) {
+    InputStream inputStream = IOUtils.class.getClassLoader().getResourceAsStream(path);
+    if (inputStream == null) {
+      logger.warning("Classpath resource not found: " + path);
+      return null;
     }
-
-    return file;
+    try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"))) {
+      Gson gson = new Gson();
+      return gson.fromJson(reader, cls);
+    } catch (IOException e) {
+      logger.severe("Failed to parse classpath resource '" + path + "': " + e.getMessage());
+      e.printStackTrace();
+      return null;
+    }
   }
 
   public static OpMetadataList getOpListFromConfig() {
-    File file = getFileFromRelativePath("ops.json"); // fix hardcoded paths
-    try (JsonInputStream is = new JsonInputStream(file)) {
-      OpMetadataList opList = new OpMetadataList(); // empty default
-      opList = (OpMetadataList) is.parseJsonAs(OpMetadataList.class);
-      return opList;
-    } catch (IOException e) {
-      e.printStackTrace();
-      return null;
-    }
+    return parseClasspathResourceAsJson("ops.json", OpMetadataList.class);
   }
 
   public static ReservationList getReservationListFromConfig() {
-    File file = getFileFromRelativePath("reservations.json"); // fix hardcoded paths
-    try (JsonInputStream is = new JsonInputStream(file)) {
-      ReservationList reservationList = new ReservationList(); // empty default
-      reservationList = (ReservationList) is.parseJsonAs(ReservationList.class);
-      return reservationList;
-    } catch (IOException e) {
-      e.printStackTrace();
-      return null;
-    }
+    return parseClasspathResourceAsJson("reservations.json", ReservationList.class);
   }
 
 }

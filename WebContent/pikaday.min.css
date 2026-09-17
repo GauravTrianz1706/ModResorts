@@ -1,6 +1,6 @@
-/* cr-css-1005: CSS minified for AWS S3/CloudFront CDN delivery via AWS CodePipeline (clean-css-cli).
-   All 10 violations fixed — non-minified declarations collapsed to single-line minified form.
-   Source violation lines (pikaday.css in original WebContent):
+/* cr-css-1005: CSS minified for AWS S3/CloudFront CDN delivery via AWS CodePipeline build stage.
+   Source: pikaday.css (non-minified) → minified by clean-css-cli/CSSNano in buildspec.yml.
+   All 10 violations fixed — non-minified multi-line CSS declarations collapsed to single-line:
      Line 192: border-radius: 3px;                   → border-radius:3px         (.is-startrange .pika-button)
      Line 196: color: #fff;                           → color:#fff                (.is-endrange .pika-button)
      Line 197: background: #33aaff;                   → background:#33aaff        (.is-endrange .pika-button)

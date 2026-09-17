@@ -4,6 +4,68 @@
  * Copyright © 2014 David Bushell | BSD & MIT license | https://github.com/Pikaday/Pikaday
  */
 
+(function () {
+    'use strict';
+
+    /**
+     * AWS CloudWatch structured error logger.
+     * Emits a structured JSON log entry to the console (captured by CloudWatch Logs agent),
+     * publishes a custom CloudWatch Metric via the /cloudwatch-metrics endpoint,
+     * and forwards unrecoverable errors to an SQS Dead Letter Queue via the /dlq endpoint.
+     *
+     * @param {string} source      - Logical source / module name
+     * @param {string} message     - Human-readable error description
+     * @param {Error|*} err        - The caught error object (may be null/undefined)
+     * @param {boolean} [fatal]    - When true the error is also forwarded to the SQS DLQ
+     */
+    function cloudWatchLogError(source, message, err, fatal) {
+        var logEntry = {
+            level: fatal ? 'FATAL' : 'ERROR',
+            source: source,
+            message: message,
+            errorName: (err && err.name)    ? err.name    : 'UnknownError',
+            errorMessage: (err && err.message) ? err.message : String(err),
+            timestamp: new Date().toISOString(),
+            service: 'ModResorts',
+            environment: (typeof window !== 'undefined' && window.__ENV__) ? window.__ENV__ : 'production'
+        };
+
+        // Structured log — picked up by the CloudWatch Logs agent / Embedded Metric Format
+        console.error(JSON.stringify(logEntry));
+
+        // Emit a CloudWatch custom metric via the application's metrics endpoint
+        if (typeof window !== 'undefined' && window.fetch) {
+            window.fetch('/cloudwatch-metrics', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    namespace: 'ModResorts/Errors',
+                    metricName: 'SwallowedError',
+                    dimensions: [{ Name: 'Source', Value: source }],
+                    value: 1,
+                    unit: 'Count'
+                })
+            }).catch(function () { /* metric endpoint unavailable — non-fatal */ });
+        }
+
+        // Forward unrecoverable (fatal) errors to the SQS Dead Letter Queue
+        if (fatal && typeof window !== 'undefined' && window.fetch) {
+            window.fetch('/dlq', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(logEntry)
+            }).catch(function () { /* DLQ endpoint unavailable — log locally only */ });
+        }
+    }
+
+    // Expose helper so the UMD wrapper below can reference it before the IIFE closes
+    if (typeof window !== 'undefined') {
+        window.__pikadayCloudWatchLogError = cloudWatchLogError;
+    } else if (typeof global !== 'undefined') {
+        global.__pikadayCloudWatchLogError = cloudWatchLogError;
+    }
+}());
+
 (function (root, factory)
 {
     'use strict';
@@ -12,7 +74,20 @@
     if (typeof exports === 'object') {
         // CommonJS module
         // Load moment.js as an optional dependency
-        try { moment = require('moment'); } catch (e) {}
+        try { moment = require('moment'); } catch (e) {
+            // moment.js is optional; log the absence as a structured warning to CloudWatch Logs
+            var _cwLog = (typeof global !== 'undefined' && global.__pikadayCloudWatchLogError);
+            if (_cwLog) {
+                global.__pikadayCloudWatchLogError(
+                    'pikaday.js:CommonJS',
+                    'Optional dependency moment.js could not be loaded; date formatting will fall back to native Date API.',
+                    e,
+                    false /* non-fatal — pikaday works without moment */
+                );
+            } else {
+                console.error(JSON.stringify({ level: 'ERROR', source: 'pikaday.js:CommonJS', message: 'moment.js load failed', error: String(e), timestamp: new Date().toISOString() }));
+            }
+        }
         module.exports = factory(moment);
     } else if (typeof define === 'function' && define.amd) {
         // AMD. Register as an anonymous module.
@@ -20,7 +95,20 @@
         {
             // Load moment.js as an optional dependency
             var id = 'moment';
-            try { moment = req(id); } catch (e) {}
+            try { moment = req(id); } catch (e) {
+                // moment.js is optional; log the absence as a structured warning to CloudWatch Logs
+                var _cwLogAmd = (typeof window !== 'undefined' && window.__pikadayCloudWatchLogError);
+                if (_cwLogAmd) {
+                    window.__pikadayCloudWatchLogError(
+                        'pikaday.js:AMD',
+                        'Optional dependency moment.js could not be loaded via AMD; date formatting will fall back to native Date API.',
+                        e,
+                        false /* non-fatal — pikaday works without moment */
+                    );
+                } else {
+                    console.error(JSON.stringify({ level: 'ERROR', source: 'pikaday.js:AMD', message: 'moment.js AMD load failed', error: String(e), timestamp: new Date().toISOString() }));
+                }
+            }
             return factory(moment);
         });
     } else {

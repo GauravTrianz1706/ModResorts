@@ -1,0 +1,148 @@
+# AWS CodeBuild buildspec for ModResorts
+# Remediation for cr-css-1005: CSS Files Not Minified for Production
+#
+# This buildspec integrates CSS minification into the AWS CodePipeline build
+# stage using clean-css-cli (Clean-CSS), so minified CSS artifacts are
+# deployed to S3 and served via CloudFront for reduced bandwidth and faster
+# CDN delivery across global AWS regions.
+#
+# Pipeline flow:
+#   Source (CodeCommit/S3) → Build (CodeBuild, this file) → Deploy (S3 + CloudFront)
+#
+# CSS minification addresses rule cr-css-1005 violations in styles.css:
+#   Occurrence  1 -- Line 314: top: 100px                             (.resort-name--footer selector)
+#   Occurrence  2 -- Line 315: left: calc(50% - 120px)                (.resort-name--footer selector)
+#   Occurrence  3 -- Line 319: text-align: center                     (.footer-content selector)
+#   Occurrence  4 -- Line 320: text-transform: none                   (.footer-content selector)
+#   Occurrence  5 -- Line 321: font-size: 20px                        (.footer-content selector)
+#   Occurrence  6 -- Line 325: margin: 30px 0 0                       (.footer-content__heading selector)
+#   Occurrence  7 -- Line 329: margin: 0                              (.footer-content__list selector)
+#   Occurrence  8 -- Line 330: font-size: 14px                        (.footer-content__list selector)
+#   Occurrence  9 -- Line 334: line-height: .5                        (.footer-content__contact selector)
+#   Occurrence 10 -- Line 338: font-size: 14px                        (.footer-content__legal selector)
+#   - All 10 non-minified multi-line CSS declarations collapsed to single-line minified form
+#   - Reduces CSS payload size for CloudFront edge delivery
+#   - Lowers S3 bandwidth costs for global distribution
+
+version: 0.2
+
+env:
+  variables:
+    S3_BUCKET: "${S3_BUCKET}"           # Set in CodePipeline environment
+    CLOUDFRONT_DIST_ID: "${CLOUDFRONT_DIST_ID}"  # Set in CodePipeline environment
+    AWS_DEFAULT_REGION: "us-east-1"
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+      java: corretto8
+    commands:
+      # Install clean-css-cli for CSS minification (CSSNano/Clean-CSS equivalent)
+      - echo "Installing clean-css-cli for CSS minification (cr-css-1005)..."
+      - npm install -g clean-css-cli@5
+      - echo "clean-css-cli version:"
+      - cleancss --version
+
+  pre_build:
+    commands:
+      - echo "Pre-build phase started on $(date)"
+      - echo "Minifying CSS files for AWS S3/CloudFront delivery (cr-css-1005)..."
+
+      # Minify styles.css → styles.min.css
+      # Addresses 10 violations (source styles.css lines 314-338):
+      #   Line 314: top: 100px                             (.resort-name--footer)
+      #   Line 315: left: calc(50% - 120px)                (.resort-name--footer)
+      #   Line 319: text-align: center                     (.footer-content)
+      #   Line 320: text-transform: none                   (.footer-content)
+      #   Line 321: font-size: 20px                        (.footer-content)
+      #   Line 325: margin: 30px 0 0                       (.footer-content__heading)
+      #   Line 329: margin: 0                              (.footer-content__list)
+      #   Line 330: font-size: 14px                        (.footer-content__list)
+      #   Line 334: line-height: .5                        (.footer-content__contact)
+      #   Line 338: font-size: 14px                        (.footer-content__legal)
+      #   — all non-minified multi-line declarations collapsed to single-line minified form
+      - |
+        cleancss \
+          --level 2 \
+          --output WebContent/styles.min.css \
+          WebContent/styles.css
+      - echo "styles.css minified to styles.min.css"
+
+      # Minify pikaday.css → pikaday.min.css (general CSS minification for CDN)
+      - |
+        if [ -f WebContent/pikaday.css ]; then
+          cleancss \
+            --level 2 \
+            --output WebContent/pikaday.min.css \
+            WebContent/pikaday.css
+          echo "pikaday.css minified to pikaday.min.css"
+        fi
+
+      # Report minification savings
+      - |
+        ORIG=$(wc -c < WebContent/styles.css)
+        MIN=$(wc -c < WebContent/styles.min.css)
+        echo "styles.css: original=${ORIG} bytes, minified=${MIN} bytes"
+
+  build:
+    commands:
+      - echo "Build phase started on $(date)"
+      # Build the WAR using Maven (minify-maven-plugin also runs during process-resources)
+      - mvn clean package -DskipTests
+      - echo "WAR artifact built successfully"
+
+  post_build:
+    commands:
+      - echo "Post-build phase started on $(date)"
+
+      # Deploy minified CSS and static assets to S3 for CloudFront delivery
+      # Set Cache-Control headers for CloudFront edge caching
+      - |
+        echo "Deploying minified CSS to S3 bucket: ${S3_BUCKET}"
+        aws s3 cp WebContent/styles.min.css \
+          s3://${S3_BUCKET}/static/css/styles.min.css \
+          --content-type "text/css" \
+          --cache-control "public, max-age=31536000, immutable" \
+          --metadata-directive REPLACE
+
+      - |
+        if [ -f WebContent/pikaday.min.css ]; then
+          aws s3 cp WebContent/pikaday.min.css \
+            s3://${S3_BUCKET}/static/css/pikaday.min.css \
+            --content-type "text/css" \
+            --cache-control "public, max-age=31536000, immutable" \
+            --metadata-directive REPLACE
+        fi
+
+      # Deploy WAR artifact to S3
+      - |
+        aws s3 cp target/modresorts-2.0.0.war \
+          s3://${S3_BUCKET}/artifacts/modresorts-2.0.0.war \
+          --content-type "application/java-archive"
+
+      # Invalidate CloudFront cache for updated CSS files so edge nodes
+      # serve the newly minified versions immediately
+      - |
+        if [ -n "${CLOUDFRONT_DIST_ID}" ]; then
+          echo "Invalidating CloudFront cache for CSS assets..."
+          aws cloudfront create-invalidation \
+            --distribution-id ${CLOUDFRONT_DIST_ID} \
+            --paths "/static/css/styles.min.css" "/static/css/pikaday.min.css"
+          echo "CloudFront invalidation submitted"
+        fi
+
+      - echo "Build and deployment complete on $(date)"
+
+artifacts:
+  files:
+    - target/modresorts-2.0.0.war
+    - WebContent/styles.min.css
+    - WebContent/pikaday.min.css
+  discard-paths: no
+  base-directory: .
+
+cache:
+  paths:
+    - '/root/.m2/**/*'
+    - '/root/.npm/**/*'
